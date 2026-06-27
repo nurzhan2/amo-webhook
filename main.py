@@ -7,7 +7,6 @@ app = FastAPI()
 
 CHANNEL_ID = os.getenv("AMO_CHANNEL_ID")
 TEAM_ID = os.getenv("AMO_TEAM_ID", "460080")
-MESSAGE_URL = f"https://api.amo.io/v1.3/direct/{CHANNEL_ID}/messages"
 
 current_token = {"access_token": os.getenv("AMO_ACCESS_TOKEN", "")}
 
@@ -48,12 +47,21 @@ async def send_message(text: str):
     headers = {
         "Authorization": f"Bearer {current_token['access_token']}",
         "Content-Type": "application/json",
+        "X-Team-Id": str(TEAM_ID),
     }
-    payload = {"type": "text", "text": text}
-    # Try team_id as query parameter
-    url = f"{MESSAGE_URL}?team_id={TEAM_ID}"
+    # Try with team_id both in header and in URL
+    urls_to_try = [
+        f"https://api.amo.io/v1.3/direct/{CHANNEL_ID}/messages",
+        f"https://api.amo.io/v1/channels/{CHANNEL_ID}/messages",
+        f"https://api.amo.io/v1.3/channels/{CHANNEL_ID}/messages",
+    ]
+    payload = {"type": "text", "text": text, "channel_id": CHANNEL_ID}
+    
     async with httpx.AsyncClient() as client:
-        response = await client.post(url, json=payload, headers=headers)
+        for url in urls_to_try:
+            response = await client.post(url, json=payload, headers=headers)
+            if response.status_code not in [404, 405]:
+                return response.status_code, f"{url}: {response.text}"
         return response.status_code, response.text
 
 
@@ -84,10 +92,4 @@ async def webhook(request: Request):
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "token_set": bool(current_token["access_token"])}
-
-
-@app.post("/test-message")
-async def test_message():
-    status, response = await send_message("Тест от Railway сервиса")
-    return {"status": status, "response": response}
+    return {"status": "ok", "channel": CHANNEL_ID, "team": TEAM_ID}
