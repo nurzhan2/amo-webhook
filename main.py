@@ -45,16 +45,15 @@ async def update_token(request: Request):
 
 
 async def send_message(text: str):
-    # Try different header combinations
     headers = {
         "Authorization": f"Bearer {current_token['access_token']}",
         "Content-Type": "application/json",
-        "X-Team-Id": TEAM_ID,
-        "X-Account-Id": TEAM_ID,
     }
     payload = {"type": "text", "text": text}
+    # Try team_id as query parameter
+    url = f"{MESSAGE_URL}?team_id={TEAM_ID}"
     async with httpx.AsyncClient() as client:
-        response = await client.post(MESSAGE_URL, json=payload, headers=headers)
+        response = await client.post(url, json=payload, headers=headers)
         return response.status_code, response.text
 
 
