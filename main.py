@@ -6,10 +6,7 @@ from fastapi.responses import JSONResponse, HTMLResponse
 app = FastAPI()
 
 CHANNEL_ID = os.getenv("AMO_CHANNEL_ID")
-TEAM_ID = os.getenv("AMO_TEAM_ID")
-AMO_LOGIN = os.getenv("AMO_LOGIN")
-AMO_PASSWORD = os.getenv("AMO_PASSWORD")
-
+TEAM_ID = os.getenv("AMO_TEAM_ID", "460080")
 MESSAGE_URL = f"https://api.amo.io/v1.3/direct/{CHANNEL_ID}/messages"
 
 current_token = {"access_token": os.getenv("AMO_ACCESS_TOKEN", "")}
@@ -20,13 +17,12 @@ async def index():
     return """
     <html><body>
     <h2>amo.tm Token Updater</h2>
-    <p>Paste your token from web.amo.tm console:</p>
     <textarea id="token" rows="5" cols="80"></textarea><br><br>
     <button onclick="updateToken()">Update Token</button>
     <div id="result"></div>
     <script>
     async function updateToken() {
-        const token = document.getElementById('token').value.trim();
+        const token = document.getElementById('token').value.trim().replace(/^['"]|['"]$/g, '');
         const res = await fetch('/update-token', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
@@ -43,18 +39,18 @@ async def index():
 @app.post("/update-token")
 async def update_token(request: Request):
     data = await request.json()
-    token = data.get("token", "").strip()
-    if token.startswith("'") or token.startswith('"'):
-        token = token[1:-1]
+    token = data.get("token", "").strip().strip("'\"")
     current_token["access_token"] = token
     return {"status": "ok", "token_preview": token[:20] + "..."}
 
 
 async def send_message(text: str):
+    # Try different header combinations
     headers = {
         "Authorization": f"Bearer {current_token['access_token']}",
         "Content-Type": "application/json",
-        "X-Team-Id": str(TEAM_ID)
+        "X-Team-Id": TEAM_ID,
+        "X-Account-Id": TEAM_ID,
     }
     payload = {"type": "text", "text": text}
     async with httpx.AsyncClient() as client:
@@ -90,3 +86,9 @@ async def webhook(request: Request):
 @app.get("/health")
 async def health():
     return {"status": "ok", "token_set": bool(current_token["access_token"])}
+
+
+@app.post("/test-message")
+async def test_message():
+    status, response = await send_message("Тест от Railway сервиса")
+    return {"status": status, "response": response}
